@@ -16,7 +16,7 @@ Plan and rationale: [`../CODE_REUSE.md`](../CODE_REUSE.md).
 
 | package | version | status |
 |---|---|---|
-| `@sk-web-backend/express-saml` | 0.0.1 | placeholder — pipeline proof only |
+| `@sk-web-backend/express-saml` | 0.0.1 | **published** — placeholder, pipeline proof only |
 
 ## Layout
 
@@ -40,44 +40,197 @@ yarn build
 yarn test:smoke    # require()s the built dist/ — run after build
 ```
 
+Three commands have no yarn 1 equivalent and are wrapped as scripts rather than left as traps:
+
+```bash
+yarn npm:login     # yarn login stores only a username and email, never an auth token
+yarn npm:pack      # yarn pack has no --dry-run; shows exactly what would ship
+yarn npm:publish   # yarn publish has no --provenance  (run from the package directory)
+```
+
+They are named with an `npm:` prefix on purpose. `login`, `publish` and `pack` are all yarn
+builtins, so a script called `publish` would be shadowed by `yarn publish` — and worse, `publish`
+is *also* an npm lifecycle script that npm runs after publishing, so that name would recurse
+infinitely.
+
+**Never run `npm install` or `npm ci` here.** Those would fight the yarn lockfile. The three
+commands above touch neither `node_modules` nor the lockfile, so they coexist with yarn safely.
+
+## Test against a consuming app
+
+Publishing is close to irreversible — npm's unpublish window is 72 hours and only applies while
+nothing depends on the package — so a broken version is a permanent entry in the registry. Verify
+against a real consumer first. Three tiers, cheapest first.
+
+### Why not `yarn link`
+
+Node resolves a symlink to its real path before resolving that module's dependencies, and this
+package finds its peers in the monorepo root:
+
+```
+passport                  web-shared-backend/node_modules/passport/lib/index.js
+express                   web-shared-backend/node_modules/express/index.js
+@node-saml/passport-saml  web-shared-backend/node_modules/@node-saml/passport-saml/lib/index.js
+```
+
+A linked package keeps resolving *those* copies rather than the consumer's, so the app ends up with
+two `passport.use()` registries and two express instances. That is exactly the failure the
+peer-dependency policy exists to prevent, and it surfaces as inexplicable auth behaviour rather
+than a clean error. Copying into `node_modules` by hand is worse still: the next `yarn install`
+silently wipes it, and it bypasses the `files` array entirely, so you would be testing against
+files that never ship.
+
+### Tier 1 — inner loop
+
+[`yalc`](https://github.com/wclr/yalc) packs and *copies* rather than symlinking, so peers resolve
+from the consumer, and it respects the `files` array.
+
+```bash
+yarn global add yalc
+
+cd packages/express-saml
+yarn build && yalc publish
+
+cd ../../../<consumer>
+yalc add @sk-web-backend/express-saml
+```
+
+After each change, `yarn build && yalc push` from the package pushes to every linked consumer.
+Clean up with `yalc remove --all && yarn install --force` in the consumer.
+
+yalc writes a `.yalc/` directory and a `file:.yalc/...` dependency, so a consumer wired up this way
+shows in `git status` — you cannot forget it is there. Add `.yalc/` and `*.tgz` to the consumer's
+`.gitignore`.
+
+### Tier 2 — packaging gate
+
+Byte-identical to what would be published. This is the tier that catches a missing entry in
+`files`, a stale `dist/`, or a broken CommonJS emit.
+
+```bash
+cd packages/express-saml
+yarn npm:pack                 # inspect the file list first
+npm pack                      # writes the .tgz; runs prepublishOnly (build + test + smoke)
+
+cd ../../../<consumer>
+yarn add file:../web-shared-backend/packages/express-saml/sk-web-backend-express-saml-0.0.1.tgz
+```
+
+Yarn 1 caches `file:` dependencies by path and filename, so re-packing at the same version is
+ignored. Bump the version or run `yarn cache clean @sk-web-backend/express-saml` between attempts.
+Note also that `yarn pack` does not run `prepublishOnly`, so it will not rebuild for you — use
+`npm pack`, or run `yarn build` first.
+
+### Tier 3 — publish gate
+
+The only tier that exercises the real thing: registry resolution, consumer CI, and a Docker build
+with no build-context tricks. Tiers 1 and 2 both break inside an image, because `.yalc/` and
+relative tarball paths are not in the build context.
+
+```bash
+cd packages/express-saml
+yarn version --new-version 0.1.0-rc.1
+yarn npm:publish --tag next
+
+# in the consumer
+yarn add @sk-web-backend/express-saml@next
+```
+
+A `^0.1.0` range never resolves to a prerelease, so no other consumer picks it up by accident, and
+the `next` dist-tag keeps `latest` pointing at the last real release. This is what lets draken
+falsify the API at step 3 without burning the `0.1.0` version number. If rc versions on public npm
+are unwanted, a local [Verdaccio](https://verdaccio.org/) registry gives the same fidelity
+privately.
+
+### Verify peers stayed single-instance
+
+Whichever tier you used, check this in the consumer before trusting the result:
+
+```bash
+yarn why passport
+```
+
+More than one `Found "passport@..."` block means the two-registry problem. Repeat for `express` and
+`@node-saml/passport-saml`.
+
 ## Publish
 
-Manual for now, via the **Publish** workflow (`workflow_dispatch`).
+Manual for now, via the **Publish** workflow (`workflow_dispatch`). Once 0.1.0 is real, the trigger
+switches to release tags.
 
-Auth is npm **trusted publishing** (OIDC) — no long-lived token in GitHub secrets, and it
-attaches a provenance attestation linking the tarball to this repo and commit. It requires
-a trusted publisher registered on npmjs.com for each package: repo
-`Sundsvallskommun/web-shared-backend`, workflow `.github/workflows/publish.yml`.
+Auth is npm **trusted publishing** (OIDC) — no long-lived token in GitHub secrets, and it attaches
+a provenance attestation linking the tarball to this repo and commit. The registered configuration:
 
-`publishConfig.access: "public"` is required on every package. Without it, publishing a
-scoped package fails with `402 Payment Required` — npm assumes a scoped package is private
-unless told otherwise.
+| field | value |
+|---|---|
+| publisher | GitHub Actions |
+| organization | `Sundsvallskommun` |
+| repository | `web-shared-backend` |
+| workflow filename | `publish.yml` |
+| environment | `npm-publish` |
 
-### Bootstrap the first publish
+Three things about that table are load-bearing:
 
-A trusted publisher is configured on a package's settings page, which only exists once the
-package does. So 0.0.1 goes out by hand, once, and everything after it runs in CI:
+- **Do not rename `publish.yml`.** npm matches the trusted publisher on the filename. Renaming it
+  breaks publishing silently — the job runs and fails at auth — until the npmjs settings page is
+  updated to match.
+- **The environment name must match on both sides.** npm's trusted publisher config keys on repo +
+  workflow + environment and has no branch field, so the `npm-publish` GitHub Environment is the
+  only place a branch restriction can live. A mismatch fails with an unhelpful OIDC error that does
+  not name the environment.
+- **Each package needs its own trusted publisher**, with these same values. The workflow's
+  `package` input and `working-directory` already handle the fan-out, so no workflow change is
+  needed when a second package lands.
+
+`publishConfig.access: "public"` is required on every package. Without it, publishing a scoped
+package fails with `402 Payment Required` — npm assumes a scoped package is private unless told
+otherwise.
+
+### What the `npm-publish` environment gates on
+
+Two rules, not one:
+
+- **Deployment branches** — `main` only.
+- **Required reviewers** — the `Sundsvallskommun/web-developers` team. Self-review is currently
+  *allowed*, so a maintainer can approve their own release while the team is small. Turn on
+  "Prevent self-review" in the environment settings once more people contribute; that is a
+  one-click change and needs no edit here.
+
+Either way, a dispatched run sits in a *Waiting* state until someone approves it from the run's page
+in the Actions tab. That is the gate working, not a stuck job — worth knowing before your first
+release, because a waiting run looks identical to a hung one.
+
+Token publishing is deliberately left enabled as a fallback, which is what makes `yarn npm:publish`
+usable for rc versions and emergencies. That script passes `--no-provenance` because npm refuses to
+attest outside a supported CI environment — so **CI must never use it**. `publish.yml` calls
+`npm publish` directly, keeping the attestation.
+
+A local publish packs whatever is on disk, so a stale or missing `dist/` would ship silently.
+`prepublishOnly` runs `yarn build && yarn test && yarn test:smoke` first, which makes that
+impossible — the smoke test `require()`s the freshly built `dist/` before anything is packed.
+
+### How 0.0.1 was bootstrapped
+
+Kept as a record, not as instructions: this is not repeatable for a package that already exists.
+
+A trusted publisher can only be configured on a package's settings page, which does not exist until
+the package does. So `0.0.1` went out by hand, once:
 
 ```bash
 # Once: create the @sk-web-backend org at npmjs.com/org/create (web only — no CLI equivalent).
 
-npm login                       # browser-based; writes a token to ~/.npmrc
-
+yarn npm:login                  # browser-based; writes a token to ~/.npmrc
 cd packages/express-saml
-npm pack --dry-run              # confirm dist/, src/, LICENSE and README are in the tarball
-npm publish --no-provenance     # --otp=<code> as well if 2FA is set to "auth and writes"
+yarn npm:pack                   # confirm the tarball contents
+yarn npm:publish                # --otp=<code> as well if 2FA is set to "auth and writes"
 ```
 
-`--no-provenance` is required locally: `publishConfig.provenance` is `true` for CI, and npm
-refuses to generate an attestation outside a supported CI environment. Do not drop it from
-`publishConfig` to work around this — CI publishes should keep it.
+The trusted publisher was then registered against the published package, and every release after
+this one goes through the **Publish** workflow with no token anywhere.
 
-Then register the trusted publisher on the package's npmjs settings page, and every release
-after this one goes through the **Publish** workflow with no token anywhere.
-
-A local `npm publish` packs whatever is on disk, so a stale or missing `dist/` would ship
-silently. `prepublishOnly` runs `yarn build && yarn test && yarn test:smoke` first, which makes
-that impossible — the smoke test `require()`s the freshly built `dist/` before anything is packed.
+One permanent consequence: **`0.0.1` carries no provenance attestation.** `--no-provenance` was
+unavoidable for a local publish, and a published version cannot be amended. The first attested
+release will be the next one. That is acceptable precisely because `0.0.1` is a throwaway.
 
 ## Consume
 
@@ -90,15 +243,14 @@ change in the consuming app.
 
 ## Setup checklist (step 1)
 
-- [ ] Create the `@sk-web-backend` npm org (free for public packages; the scope is
-      currently unclaimed) and add the Sundsvallskommun publishing account
-- [ ] Create `Sundsvallskommun/web-shared-backend` on GitHub and push this scaffold
-- [ ] Register the trusted publisher on npmjs for `@sk-web-backend/express-saml`. If npm
-      will not accept one for a name that does not exist yet, publish 0.0.1 once with a
-      granular automation token, then switch and delete the secret.
-- [ ] Publish `@sk-web-backend/express-saml@0.0.1`
-- [ ] Install it in one consumer, call `pipelineCheck()` once, confirm the value at runtime
-      and that the app's Docker image still builds unchanged
+- [x] Create the `@sk-web-backend` npm org and add the Sundsvallskommun publishing account
+- [x] Create `Sundsvallskommun/web-shared-backend` on GitHub and push this scaffold
+- [x] Register the trusted publisher on npmjs for `@sk-web-backend/express-saml`
+- [x] Publish `@sk-web-backend/express-saml@0.0.1`
+- [x] Install it in one consumer and call `pipelineCheck()` once — confirmed at runtime in local
+      dev
+- [ ] Confirm the consumer's Docker image still builds unchanged, and that the package resolves in
+      the consumer's CI. Step 1 is not done until all three environments are covered.
 - [ ] Add the shared Renovate preset so consumers pick up releases
 - [ ] Pin `packageManager` in draken, web-app-business-center and katla
 - [ ] Fix `draken/backend/Dockerfile` — `RUN yarn build 2>&1 || true` means the build cannot

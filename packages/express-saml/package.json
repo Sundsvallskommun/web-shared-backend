@@ -27,6 +27,8 @@
     "test:coverage": "vitest run --coverage",
     "test:smoke": "node test/smoke.cjs",
     "type-check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
+    "npm:pack": "npm pack --dry-run",
+    "npm:publish": "npm publish --no-provenance",
     "prepublishOnly": "yarn build && yarn test && yarn test:smoke"
   },
   "peerDependencies": {

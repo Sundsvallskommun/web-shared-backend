@@ -1,6 +1,10 @@
 name: Publish
 
 # Manual for now. Once 0.1.0 is real, switch the trigger to release tags.
+#
+# DO NOT RENAME THIS FILE. npm's trusted publisher matches on the workflow filename
+# (`publish.yml`) alongside the repo and environment. Renaming it breaks publishing silently —
+# the job runs and fails at auth — until the npmjs settings page is updated to match.
 on:
   workflow_dispatch:
     inputs:
@@ -18,6 +22,12 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     name: Publish to npmjs
+    # Must match the environment registered on the npm trusted publisher exactly, or OIDC auth
+    # fails with an unhelpful error. The GitHub Environment of this name carries a
+    # deployment-branch rule limiting publishes to `main` — npm's trusted publisher config keys
+    # on repo + workflow + environment and has no branch field of its own, so this is the only
+    # place that restriction can live.
+    environment: npm-publish
     steps:
       - name: Checkout
         uses: actions/checkout@v6
