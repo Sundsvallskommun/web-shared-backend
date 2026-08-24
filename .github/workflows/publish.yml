@@ -1,10 +1,7 @@
 name: Publish
 
 # Manual for now. Once 0.1.0 is real, switch the trigger to release tags.
-#
-# DO NOT RENAME THIS FILE. npm's trusted publisher matches on the workflow filename
-# (`publish.yml`) alongside the repo and environment. Renaming it breaks publishing silently —
-# the job runs and fails at auth — until the npmjs settings page is updated to match.
+# DO NOT RENAME THIS FILE: npm's trusted publisher matches on the filename.
 on:
   workflow_dispatch:
     inputs:
@@ -15,18 +12,13 @@ on:
 
 permissions:
   contents: read
-  # Required for npm trusted publishing (OIDC) and for provenance attestation.
-  id-token: write
+  id-token: write # trusted publishing (OIDC) + provenance
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     name: Publish to npmjs
-    # Must match the environment registered on the npm trusted publisher exactly, or OIDC auth
-    # fails with an unhelpful error. The GitHub Environment of this name carries a
-    # deployment-branch rule limiting publishes to `main` — npm's trusted publisher config keys
-    # on repo + workflow + environment and has no branch field of its own, so this is the only
-    # place that restriction can live.
+    # Must match the environment on the npm trusted publisher, or OIDC auth fails.
     environment: npm-publish
     steps:
       - name: Checkout
@@ -39,13 +31,20 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: yarn
 
-      # Trusted publishing needs a recent npm; the one bundled with node 24 may predate it.
-      - name: Update npm
-        run: npm install -g npm@latest
+      # Asserted, not installed: node 24 already bundles a new enough npm, and
+      # `npm i -g npm@latest` would fetch an unpinned package into a job with id-token: write.
+      - name: Verify npm supports trusted publishing
+        run: |
+          need=11.5.1
+          have=$(npm --version)
+          echo "npm $have (need >= $need)"
+          if [ "$(printf '%s\n%s\n' "$need" "$have" | sort -V | head -n1)" != "$need" ]; then
+            echo "::error::npm $have is too old for trusted publishing (need >= $need)"
+            exit 1
+          fi
 
       - name: Install dependencies
-        # --ignore-scripts: skip dependency lifecycle scripts (supply-chain hardening).
-        run: yarn --frozen-lockfile --silent --ignore-scripts
+        run: yarn --frozen-lockfile --silent --ignore-scripts # --ignore-scripts: supply-chain hardening
 
       - name: Type check
         run: yarn type-check
@@ -56,20 +55,10 @@ jobs:
       - name: Build
         run: yarn build
 
-      # Proves the exact dist/ about to be packed loads under `require`. `prepublishOnly` runs
-      # this too, which covers the hand-run bootstrap publish; here it fails the job before the
-      # publish step rather than midway through it.
       - name: Smoke test the built artifact
         run: yarn test:smoke
 
-      # No NPM_TOKEN. Auth comes from the OIDC id-token, which requires a trusted
-      # publisher configured on npmjs.com for this package: repo
-      # Sundsvallskommun/web-shared-backend, workflow .github/workflows/publish.yml.
-      #
-      # Bootstrap: a trusted publisher can only be registered against a package that
-      # already exists, so 0.0.1 is published once by hand from a maintainer's machine
-      # (see "Bootstrap the first publish" in the README) and every release after that
-      # runs here. No automation token is ever created.
+      # No NPM_TOKEN: auth is the OIDC id-token. See "Publish" in the README.
       - name: Publish
         working-directory: packages/${{ inputs.package }}
         run: npm publish
