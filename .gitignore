@@ -1,0 +1,17 @@
+node_modules/
+packages/*/dist/
+*.log
+yarn-error.log
+
+# Local registry credentials — never commit a token. The committed .npmrc reads ${NPM_TOKEN}
+# from the environment instead.
+.npmrc.local
+
+.DS_Store
+
+# Vitest coverage output.
+coverage/
+
+# Planning doc; its canonical copy lives outside this repo. A working copy is sometimes dropped
+# here for reference and must not be committed.
+CODE_REUSE.md

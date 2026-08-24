@@ -1,0 +1,65 @@
+name: Publish
+
+# Manual for now. Once 0.1.0 is real, switch the trigger to release tags.
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Workspace to publish
+        required: true
+        default: express-saml
+
+permissions:
+  contents: read
+  # Required for npm trusted publishing (OIDC) and for provenance attestation.
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    name: Publish to npmjs
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: yarn
+
+      # Trusted publishing needs a recent npm; the one bundled with node 24 may predate it.
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        # --ignore-scripts: skip dependency lifecycle scripts (supply-chain hardening).
+        run: yarn --frozen-lockfile --silent --ignore-scripts
+
+      - name: Type check
+        run: yarn type-check
+
+      - name: Test
+        run: yarn test
+
+      - name: Build
+        run: yarn build
+
+      # Proves the exact dist/ about to be packed loads under `require`. `prepublishOnly` runs
+      # this too, which covers the hand-run bootstrap publish; here it fails the job before the
+      # publish step rather than midway through it.
+      - name: Smoke test the built artifact
+        run: yarn test:smoke
+
+      # No NPM_TOKEN. Auth comes from the OIDC id-token, which requires a trusted
+      # publisher configured on npmjs.com for this package: repo
+      # Sundsvallskommun/web-shared-backend, workflow .github/workflows/publish.yml.
+      #
+      # Bootstrap: a trusted publisher can only be registered against a package that
+      # already exists, so 0.0.1 is published once by hand from a maintainer's machine
+      # (see "Bootstrap the first publish" in the README) and every release after that
+      # runs here. No automation token is ever created.
+      - name: Publish
+        working-directory: packages/${{ inputs.package }}
+        run: npm publish

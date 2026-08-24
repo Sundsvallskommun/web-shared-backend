@@ -1,0 +1,24 @@
+/**
+ * Placeholder release (0.0.1).
+ *
+ * This version exists only to prove the publish pipeline end to end: publish from CI to
+ * npmjs via trusted publishing, then install in a consumer in local dev, in CI, and in a
+ * Docker build.
+ *
+ * No SAML code ships here by design. Mixing a behaviour change into the pipeline proof makes
+ * a failure ambiguous — if an install or an image build breaks, it should be unambiguously
+ * the pipeline. The real API (`createSamlRouter`, `samlGuard`) lands in 0.1.0.
+ *
+ * See the CODE_REUSE.md planning doc (kept outside this repo), steps 1 and 2.
+ */
+
+/** Identifies the published artifact a consumer actually resolved. */
+export const PIPELINE_CHECK = '@sk-web-backend/express-saml@0.0.1';
+
+/**
+ * Returns the marker above. Call it from a consumer once to confirm the package resolved,
+ * built into `dist/`, and loaded at runtime inside the container.
+ */
+export function pipelineCheck(): string {
+  return PIPELINE_CHECK;
+}

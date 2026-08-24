@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: Build and type check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: yarn
+
+      - name: Install dependencies
+        # --ignore-scripts: skip dependency lifecycle scripts (supply-chain hardening).
+        # No registry auth: every dependency, including our own packages, is public.
+        run: yarn --frozen-lockfile --silent --ignore-scripts
+
+      - name: Type check
+        run: yarn type-check
+
+      - name: Test
+        run: yarn test
+
+      - name: Build
+        run: yarn build
+
+      - name: Smoke test the built artifact
+        run: yarn test:smoke
+
+      # Handed to the smoke job so it can exercise dist/ on the oldest supported node without
+      # installing anything: test/smoke.cjs has zero dependencies.
+      #
+      # Paths are spelled out per package rather than globbed: upload-artifact roots the archive
+      # at the least common ancestor of what it matches, so `packages/*/dist` with a single match
+      # would flatten to the dist contents and unpack to the wrong place. Add a pair of lines
+      # here when a second package lands.
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-express-saml
+          path: packages/express-saml/dist
+          retention-days: 1
+
+  smoke:
+    runs-on: ubuntu-latest
+    needs: build
+    name: Smoke (node ${{ matrix.node }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # 18 is the floor declared in `engines` (msbolag and katla still run node:18-slim);
+        # 24 is what the rest of CI uses. vitest 4 requires node >= 20 and cannot cover the
+        # floor, which is exactly why the smoke test is dependency-free plain CommonJS.
+        node: ['18', '24']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Download dist
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-express-saml
+          path: packages/express-saml/dist
+
+      - name: Smoke test
+        run: node packages/express-saml/test/smoke.cjs
+
+  # TODO(0.1.0): add a compatibility matrix once real code imports express.
+  #
+  #   strategy:
+  #     matrix:
+  #       include:
+  #         - express: "4.21.2"   types: "4.17.25"
+  #         - express: "5.1.0"    types: "5.0.3"
+  #
+  # The package returns an express `Router`, so its emitted .d.ts is exposed to the
+  # consumer's @types/express major — both must be type-checked, not just both runtimes.
+  # With yarn 1 workspaces, override per leg inside packages/express-saml via
+  # `yarn add -D --exact express@$VERSION @types/express@$TYPES` before type-check.
+  # Matrix is omitted at 0.0.1 because nothing imports express yet.

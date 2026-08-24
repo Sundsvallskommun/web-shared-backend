@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    // CommonJS only. Every consumer backend is `"module": "commonjs"` and starts with
+    // `node dist/server.js`, so a dual ESM/CJS build would be complexity with no consumer.
+    "target": "es2021",
+    "lib": ["es2021"],
+    "module": "commonjs",
+    "moduleResolution": "node",
+
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // Consumers span @types/express v4 and v5 and TypeScript 5.8 -> 6.0. skipLibCheck keeps
+    // their type-check green when their ambient types disagree with ours.
+    "skipLibCheck": true,
+
+    // Left off deliberately: importHelpers would add a tslib runtime dependency, and only
+    // one consumer currently has tslib installed.
+    "importHelpers": false,
+    "pretty": true
+  }
+}

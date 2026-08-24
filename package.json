@@ -1,0 +1,32 @@
+{
+  "name": "sk-web-backend",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Shared backend libraries for Sundsvalls kommun Express apps",
+  "license": "MIT",
+  "packageManager": "yarn@1.22.22",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=18.18"
+  },
+  "scripts": {
+    "build": "yarn workspaces run build",
+    "test": "yarn workspaces run test",
+    "test:smoke": "yarn workspaces run test:smoke",
+    "test:coverage": "yarn workspaces run test:coverage",
+    "type-check": "yarn workspaces run type-check",
+    "clean": "yarn workspaces run clean"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.11",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Sundsvallskommun/web-shared-backend.git"
+  },
+  "author": "Sundsvallskommun"
+}

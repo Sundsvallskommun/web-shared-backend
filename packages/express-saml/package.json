@@ -1,0 +1,63 @@
+{
+  "name": "@sk-web-backend/express-saml",
+  "version": "0.0.1",
+  "description": "SAML login/logout flow for Sundsvalls kommun Express backends",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "!src/**/*.test.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "engines": {
+    "node": ">=18.18"
+  },
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "yarn clean && tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:smoke": "node test/smoke.cjs",
+    "type-check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
+    "prepublishOnly": "yarn build && yarn test && yarn test:smoke"
+  },
+  "peerDependencies": {
+    "@node-saml/passport-saml": "^5.1.0",
+    "express": "^4.21.2 || ^5.1.0",
+    "express-session": "^1.18.0",
+    "passport": "^0.7.0"
+  },
+  "devDependencies": {
+    "@node-saml/passport-saml": "^5.1.0",
+    "@types/express": "^5.0.3",
+    "@types/express-session": "^1.18.2",
+    "@types/passport": "^1.0.17",
+    "express": "^5.1.0",
+    "express-session": "^1.18.2",
+    "passport": "^0.7.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Sundsvallskommun/web-shared-backend.git",
+    "directory": "packages/express-saml"
+  },
+  "homepage": "https://github.com/Sundsvallskommun/web-shared-backend/tree/main/packages/express-saml",
+  "bugs": "https://github.com/Sundsvallskommun/web-shared-backend/issues",
+  "author": "Sundsvallskommun",
+  "keywords": [
+    "saml",
+    "express",
+    "passport",
+    "passport-saml",
+    "sso",
+    "single-sign-on"
+  ]
+}

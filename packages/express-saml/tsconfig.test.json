@@ -1,0 +1,11 @@
+{
+  // tsconfig.json excludes tests so they stay out of dist/. This project exists purely to
+  // type-check them; it emits nothing.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.cjs"]
+}
