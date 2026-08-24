@@ -17,6 +17,7 @@ const dist = require('../dist');
 assert.equal(typeof dist.pipelineCheck, 'function', 'dist must export pipelineCheck()');
 assert.equal(typeof dist.PIPELINE_CHECK, 'string', 'dist must export PIPELINE_CHECK');
 assert.equal(dist.pipelineCheck(), dist.PIPELINE_CHECK);
+assert.equal(dist.pipelineCheck('smoke'), `${dist.PIPELINE_CHECK} (smoke)`);
 assert.equal(dist.PIPELINE_CHECK, `${pkg.name}@${pkg.version}`);
 
 console.log(`smoke ok: ${pkg.name}@${pkg.version} loads from dist/ on node ${process.version}`);

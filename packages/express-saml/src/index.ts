@@ -1,5 +1,5 @@
 /**
- * Placeholder release (0.0.1).
+ * Placeholder release (0.0.x).
  *
  * This version exists only to prove the publish pipeline end to end: publish from CI to
  * npmjs via trusted publishing, then install in a consumer in local dev, in CI, and in a
@@ -13,12 +13,23 @@
  */
 
 /** Identifies the published artifact a consumer actually resolved. */
-export const PIPELINE_CHECK = '@sk-web-backend/express-saml@0.0.1';
+export const PIPELINE_CHECK = '@sk-web-backend/express-saml@0.0.2';
 
 /**
  * Returns the marker above. Call it from a consumer once to confirm the package resolved,
  * built into `dist/`, and loaded at runtime inside the container.
+ *
+ * Pass `context` to tag where the call came from — the same consumer is verified in local dev,
+ * in CI and inside a Docker image, and the three log lines are otherwise indistinguishable:
+ *
+ * ```ts
+ * console.log(pipelineCheck('docker'));
+ * // @sk-web-backend/express-saml@0.0.2 (docker)
+ * ```
+ *
+ * Deliberately takes no Node globals, so the emitted CommonJS stays loadable on every runtime
+ * `engines` allows.
  */
-export function pipelineCheck(): string {
-  return PIPELINE_CHECK;
+export function pipelineCheck(context?: string): string {
+  return context ? `${PIPELINE_CHECK} (${context})` : PIPELINE_CHECK;
 }

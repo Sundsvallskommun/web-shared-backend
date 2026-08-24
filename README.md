@@ -16,7 +16,7 @@ Plan and rationale: [`../CODE_REUSE.md`](../CODE_REUSE.md).
 
 | package | version | status |
 |---|---|---|
-| `@sk-web-backend/express-saml` | 0.0.1 | **published** — placeholder, pipeline proof only |
+| `@sk-web-backend/express-saml` | 0.0.2 | **published** — placeholder, pipeline proof only |
 
 ## Layout
 
@@ -113,7 +113,7 @@ yarn npm:pack                 # inspect the file list first
 npm pack                      # writes the .tgz; runs prepublishOnly (build + test + smoke)
 
 cd ../../../<consumer>
-yarn add file:../web-shared-backend/packages/express-saml/sk-web-backend-express-saml-0.0.1.tgz
+yarn add file:../web-shared-backend/packages/express-saml/sk-web-backend-express-saml-0.0.2.tgz
 ```
 
 Yarn 1 caches `file:` dependencies by path and filename, so re-packing at the same version is
