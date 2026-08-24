@@ -56,6 +56,22 @@ infinitely.
 **Never run `npm install` or `npm ci` here.** Those would fight the yarn lockfile. The three
 commands above touch neither `node_modules` nor the lockfile, so they coexist with yarn safely.
 
+### Deferred: the express compatibility matrix
+
+At 0.1.0, CI needs a matrix over both express majors **and** both `@types/express` majors:
+
+| express | @types/express |
+|---|---|
+| 4.21.2 | 4.17.25 |
+| 5.1.0 | 5.0.3 |
+
+Runtimes alone are not enough. The package returns an express `Router`, so its emitted `.d.ts` is
+exposed to whichever `@types/express` major the consumer has installed — a type-level break would
+pass a runtime-only matrix. With yarn 1 workspaces, override per leg inside `packages/express-saml`
+with `yarn add -D --exact express@$VERSION @types/express@$TYPES` before running `type-check`.
+
+Omitted at 0.0.x because nothing imports express yet.
+
 ## Test against a consuming app
 
 Publishing is close to irreversible — npm's unpublish window is 72 hours and only applies while
