@@ -8,6 +8,14 @@ describe('pipelineCheck', () => {
     expect(pipelineCheck()).toBe(PIPELINE_CHECK);
   });
 
+  it('appends a context tag when given one', () => {
+    expect(pipelineCheck('docker')).toBe(`${PIPELINE_CHECK} (docker)`);
+  });
+
+  it('ignores an empty context rather than emitting empty parentheses', () => {
+    expect(pipelineCheck('')).toBe(PIPELINE_CHECK);
+  });
+
   // The marker's whole job is telling you which published artifact a consumer actually
   // resolved, and it is hardcoded. A version bump that forgets to update it produces a marker
   // that confidently reports the wrong version — exactly the failure it exists to rule out.

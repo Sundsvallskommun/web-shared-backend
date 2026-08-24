@@ -1,6 +1,6 @@
 {
   "name": "@sk-web-backend/express-saml",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "SAML login/logout flow for Sundsvalls kommun Express backends",
   "license": "MIT",
   "main": "./dist/index.js",
